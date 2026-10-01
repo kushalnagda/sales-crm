@@ -13,7 +13,7 @@
     <form id="loginForm" class="login-card" method="post" action="#">
       <h1 class="brand-name">Sales CRM</h1>
       <p class="muted">Sign in to continue</p>
-      <label>Email<input name="email" type="email" autocomplete="username" required></label>
+      <label>User ID<input name="userid" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
       <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
       <button type="submit" class="primary" id="loginBtn" disabled>Sign in</button>
       <p id="loginError" class="error"></p>
@@ -22,6 +22,17 @@
         Admin: admin@demo.com / admin123<br>
         Employee: employee@demo.com / emp123
       </div>
+    </form>
+    <!-- First-time setup (open the site with ?setup): set the password for a User ID the admin approved -->
+    <form id="setupForm" class="login-card hidden" method="post" action="#">
+      <h1 class="brand-name">Sales CRM</h1>
+      <p class="muted">First-time setup: choose a password for your approved User ID.</p>
+      <label>User ID<input name="userid" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+      <label>New password<input name="password" type="password" autocomplete="new-password" minlength="6" required></label>
+      <label>Confirm password<input name="confirm" type="password" autocomplete="new-password" minlength="6" required></label>
+      <button type="submit" class="primary" id="setupBtn" disabled>Activate account</button>
+      <p id="setupError" class="error"></p>
+      <a href="./" class="small-text">Back to sign in</a>
     </form>
   </div>
 

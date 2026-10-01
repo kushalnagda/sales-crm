@@ -44,6 +44,16 @@ window.CRM_API = (() => {
       },
       async signOut() { await sb.auth.signOut(); },
       async changePassword(password) { chk(await sb.auth.updateUser({ password })); },
+      // First-time setup: the database only allows this for User IDs an admin has approved
+      async activate(email, password) {
+        const { data, error } = await sb.auth.signUp({ email, password });
+        if (error) throw new Error(error.message);
+        if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+          throw new Error('This User ID is already active. Sign in instead.');
+        }
+        if (!data.session) throw new Error('Account created, but "Confirm email" is switched on in Supabase. Turn it off, then sign in.');
+        return profile();
+      },
 
       async listProfiles() { return chk(await sb.from('profiles').select('*').order('full_name')); },
       async updateProfile(id, patch) { chk(await sb.from('profiles').update(patch).eq('id', id)); },
@@ -55,9 +65,13 @@ window.CRM_API = (() => {
           auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'crm-signup-tmp' },
         });
         const { data, error } = await tmp.auth.signUp({ email, password });
-        if (error) throw new Error(error.message);
+        if (error) {
+          // Don't leave an approved-but-unclaimed User ID behind
+          await sb.from('allowed_users').delete().eq('email', email);
+          throw new Error(error.message);
+        }
         if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-          throw new Error('A login with this email already exists.');
+          throw new Error('A login with this User ID already exists.');
         }
       },
 
@@ -135,6 +149,7 @@ window.CRM_API = (() => {
       },
       async signOut() { d.session = null; persist(); },
       async changePassword(p) { need(me()); me().password = p; persist(); },
+      async activate() { throw new Error('First-time setup is only available in the live version.'); },
 
       async listProfiles() { need(me()); return d.users.map(pub); },
       async updateProfile(id, patch) {
@@ -144,7 +159,7 @@ window.CRM_API = (() => {
       async createUser({ full_name, email, password, role }) {
         need(isAdmin());
         email = email.trim().toLowerCase();
-        if (d.users.some(u => u.email === email)) throw new Error('A login with this email already exists.');
+        if (d.users.some(u => u.email === email)) throw new Error('A login with this User ID already exists.');
         d.users.push({ id: 'u-' + (++d.seq), email, password, full_name, role, active: true, created_at: nowIso() });
         persist();
       },

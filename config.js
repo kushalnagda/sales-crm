@@ -5,4 +5,6 @@ window.CRM_CONFIG = {
   SUPABASE_URL: 'https://dzpkifkyjfrsmwabwkzd.supabase.co',
   SUPABASE_ANON_KEY: 'sb_publishable_HKCOFauiqxBbejMTTHySRQ_dySSfOrp',
   COMPANY_NAME: 'Alphanex Sales CRM',
+  // People sign in with a User ID (e.g. "rahul"); internally it becomes rahul@<USER_DOMAIN>.
+  USER_DOMAIN: 'alphanex.crm',
 };

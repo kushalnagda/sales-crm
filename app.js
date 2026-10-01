@@ -55,9 +55,21 @@
     const t = today();
     return l.next_connect < t ? 'OVERDUE' : l.next_connect === t ? 'TODAY' : 'UPCOMING';
   }
+  // People sign in with a short User ID; Supabase needs an email, so "rahul" becomes "rahul@<USER_DOMAIN>"
+  const USER_DOMAIN = String(cfg.USER_DOMAIN || 'crm.local').toLowerCase();
+  function toLoginEmail(id) {
+    const s = String(id || '').trim().toLowerCase();
+    if (s.includes('@')) return s;
+    if (!/^[a-z0-9._-]+$/.test(s)) throw new Error('User ID can only contain letters, numbers, dot, dash and underscore.');
+    return s + '@' + USER_DOMAIN;
+  }
+  function displayId(email) {
+    const e = String(email || '');
+    return e.toLowerCase().endsWith('@' + USER_DOMAIN) ? e.slice(0, -(USER_DOMAIN.length + 1)) : e;
+  }
   function userName(id) {
     const u = users.find(x => x.id === id);
-    return u ? (u.full_name || u.email) : (id ? 'Unknown' : 'Unassigned');
+    return u ? (u.full_name || displayId(u.email)) : (id ? 'Unknown' : 'Unassigned');
   }
   function phoneKey(p) {
     const digits = String(p || '').split(/[\/;,]/)[0].replace(/\D/g, '');
@@ -90,7 +102,7 @@
     let html = includeAll ? `<option value="">All team members</option>` : '';
     if (includeUnassigned) html += `<option value="__none">Unassigned</option>`;
     return html + activeUsers().map(u =>
-      `<option value="${esc(u.id)}" ${u.id === selectedId ? 'selected' : ''}>${esc(u.full_name || u.email)}${u.role === 'admin' ? ' (admin)' : ''}</option>`).join('');
+      `<option value="${esc(u.id)}" ${u.id === selectedId ? 'selected' : ''}>${esc(u.full_name || displayId(u.email))}${u.role === 'admin' ? ' (admin)' : ''}</option>`).join('');
   }
 
   // ---------- Excel library (loaded on demand) ----------
@@ -123,12 +135,36 @@
   }
 
   function showLogin(err) {
+    const setup = api.mode === 'supabase' && /[?&]setup\b/.test(location.search);
     $('#appShell').classList.add('hidden');
     $('#loginScreen').classList.remove('hidden');
+    $('#loginForm').classList.toggle('hidden', setup);
+    $('#setupForm').classList.toggle('hidden', !setup);
     $('#loginError').textContent = err || '';
     $('#demoHint').classList.toggle('hidden', api.mode !== 'demo');
     $('#loginBtn').disabled = api.mode === 'error';
+    $('#setupBtn').disabled = api.mode === 'error';
   }
+
+  $('#setupForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const f = e.target;
+    $('#setupError').textContent = '';
+    if (f.password.value !== f.confirm.value) { $('#setupError').textContent = 'Passwords do not match.'; return; }
+    const btn = $('#setupBtn');
+    btn.disabled = true;
+    try {
+      me = await api.activate(toLoginEmail(f.userid.value), f.password.value);
+      f.reset();
+      history.replaceState(null, '', location.pathname);
+      startApp();
+    } catch (err) {
+      $('#setupError').textContent = /database error/i.test(err.message)
+        ? 'This User ID has not been approved. Ask your admin to create it.' : err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   $('#loginForm').addEventListener('submit', async e => {
     e.preventDefault();
@@ -137,7 +173,7 @@
     btn.disabled = true;
     $('#loginError').textContent = '';
     try {
-      me = await api.signIn(f.email.value, f.password.value);
+      me = await api.signIn(toLoginEmail(f.userid.value), f.password.value);
       if (!me.active) { await api.signOut(); throw new Error('This account has been deactivated.'); }
       f.reset();
       startApp();
@@ -157,7 +193,7 @@
     $('#loginScreen').classList.add('hidden');
     $('#appShell').classList.remove('hidden');
     $('#demoBanner').classList.toggle('hidden', api.mode !== 'demo');
-    $('#meName').textContent = me.full_name || me.email;
+    $('#meName').textContent = me.full_name || displayId(me.email);
     $('#meRole').textContent = isAdmin() ? 'Admin' : 'Employee';
     $('#view').innerHTML = '<p class="muted">Loading…</p>';
     await reload();
@@ -262,7 +298,7 @@
           <th class="num">Converted</th><th class="num">Overdue</th><th class="num">Due today</th><th class="num">Connects today</th>
           <th class="num">Connects 7d</th><th>Last activity</th></tr></thead>
         <tbody>${rows.map(r => `<tr data-owner="${esc(r.u.id)}">
-          <td><div class="li-title">${esc(r.u.full_name || r.u.email)}</div><div class="sub">${r.u.role === 'admin' ? 'Admin' : 'Employee'}</div></td>
+          <td><div class="li-title">${esc(r.u.full_name || displayId(r.u.email))}</div><div class="sub">${r.u.role === 'admin' ? 'Admin' : 'Employee'}</div></td>
           <td class="num">${r.total}</td><td class="num">${r.hot}</td><td class="num">${r.warm}</td><td class="num">${r.cold}</td>
           <td class="num">${r.conv}</td><td class="num ${r.over ? 'overdue' : ''}">${r.over}</td><td class="num">${r.today}</td>
           <td class="num">${r.ct}</td><td class="num">${r.c7}</td><td class="sub">${r.last ? fmtDateTime(r.last) : '-'}</td></tr>`).join('')}
@@ -527,7 +563,8 @@
   function findUser(v) {
     const s = String(v ?? '').trim().toLowerCase();
     if (!s) return null;
-    return users.find(u => u.email.toLowerCase() === s || (u.full_name || '').toLowerCase() === s) || null;
+    return users.find(u => u.email.toLowerCase() === s || displayId(u.email).toLowerCase() === s ||
+      (u.full_name || '').toLowerCase() === s) || null;
   }
 
   async function parseFile(file) {
@@ -590,7 +627,7 @@
           <input type="file" id="upFile" accept=".xlsx,.xls,.csv" multiple>
           ${isAdmin() ? `<label class="inline">Assign to <select id="upOwner">${userOptions(me.id)}</select></label>` : ''}
         </div>
-        ${isAdmin() ? '<p class="muted small-text">If the sheet has an "Assigned To" column with a team member\'s name or email, that is used instead.</p>' : ''}
+        ${isAdmin() ? '<p class="muted small-text">If the sheet has an "Assigned To" column with a team member\'s name or User ID, that is used instead.</p>' : ''}
         <label class="check"><input type="checkbox" id="upSkipDup" checked> Skip clients whose contact number already exists</label>
       </div>
       <div id="upPreview"></div>`;
@@ -668,7 +705,7 @@
       const ws = XLSX.utils.aoa_to_sheet([
         SHEET_HEADERS.filter(h => !['Day Since Contacted', 'Follow ups'].includes(h)),
         [1, 'Sample Client', 'Mumbai', 'client@example.com', '9876543210', 'Interested in PMS, call next week', 'Hot', 'Y', '', 'Y',
-          today(), 'Share factsheet', today(), 'Stallion', me.full_name || me.email],
+          today(), 'Share factsheet', today(), 'Stallion', displayId(me.email)],
       ]);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Clients');
@@ -695,20 +732,20 @@
     const count = id => leads.filter(l => l.assigned_to === id).length;
     $('#view').innerHTML = `<header class="view-head"><h1>Team &amp; users</h1></header>
       <div class="card">
-        <h2>Create a login</h2>
+        <h2>Create an employee login</h2>
         <form id="newUserForm" class="form-grid four">
           <label>Full name<input name="full_name" required></label>
-          <label>Email<input name="email" type="email" required></label>
-          <label>Temporary password<input name="password" type="text" minlength="6" required></label>
+          <label>User ID<input name="userid" required autocapitalize="none" spellcheck="false" placeholder="e.g. rahul"></label>
+          <label>Temporary password<input name="password" type="text" minlength="6" required autocomplete="off"></label>
           <label>Role<select name="role"><option value="employee">Employee</option><option value="admin">Admin</option></select></label>
           <div class="span-all row"><button class="primary" type="submit">Create user</button>
-            <span class="muted small-text">Share the email and password with the employee. They can change the password under "My account".</span></div>
+            <span class="muted small-text">Share the User ID and password with the employee. They can change the password under "My account".</span></div>
         </form>
       </div>
       <div class="card"><h2>Users (${users.length})</h2><div class="table-wrap flat"><table>
-        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th class="num">Clients</th><th>Status</th><th>Created</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>User ID</th><th>Role</th><th class="num">Clients</th><th>Status</th><th>Created</th><th></th></tr></thead>
         <tbody>${users.map(u => `<tr>
-          <td class="li-title">${esc(u.full_name || '-')}</td><td>${esc(u.email)}</td>
+          <td class="li-title">${esc(u.full_name || '-')}</td><td>${esc(displayId(u.email))}</td>
           <td>${u.id === me.id ? 'Admin (you)' : `<select data-role="${esc(u.id)}"><option value="employee" ${u.role === 'employee' ? 'selected' : ''}>Employee</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option></select>`}</td>
           <td class="num">${count(u.id)}</td>
           <td>${u.active ? '<span class="pill st-converted">Active</span>' : '<span class="pill st-not-interested">Deactivated</span>'}</td>
@@ -720,13 +757,16 @@
     $('#newUserForm').addEventListener('submit', async e => {
       e.preventDefault();
       const f = e.target;
-      const data = { full_name: f.full_name.value.trim(), email: f.email.value.trim(), password: f.password.value, role: f.role.value };
+      const name = f.full_name.value.trim();
       const btn = f.querySelector('button[type=submit]');
       btn.disabled = true;
-      const ok = await guard(async () => { await api.createUser(data); return true; });
+      const ok = await guard(async () => {
+        await api.createUser({ full_name: name, email: toLoginEmail(f.userid.value), password: f.password.value, role: f.role.value });
+        return true;
+      });
       btn.disabled = false;
       if (!ok) return;
-      toast(`Login created for ${data.full_name}`);
+      toast(`Login created for ${name}`);
       users = await guard(() => api.listProfiles()) || users;
       renderTeam();
     });
@@ -735,7 +775,7 @@
   // ---------- Account ----------
   function renderAccount() {
     $('#view').innerHTML = `<header class="view-head"><h1>My account</h1></header>
-      <div class="card"><p><strong>${esc(me.full_name || '')}</strong><br>${esc(me.email)}<br><span class="muted">${isAdmin() ? 'Admin' : 'Employee'}</span></p></div>
+      <div class="card"><p><strong>${esc(me.full_name || '')}</strong><br>User ID: ${esc(displayId(me.email))}<br><span class="muted">${isAdmin() ? 'Admin' : 'Employee'}</span></p></div>
       <div class="card"><h2>Change password</h2>
         <form id="pwForm" class="row">
           <input name="pw" type="password" minlength="6" placeholder="New password (min 6 characters)" required autocomplete="new-password" style="max-width:300px">
@@ -791,7 +831,7 @@
     const toggle = t.closest('[data-toggle-user]');
     if (toggle) {
       const u = users.find(x => x.id === toggle.dataset.toggleUser);
-      if (u.active && !confirm(`Deactivate ${u.full_name || u.email}? They will no longer be able to sign in.`)) return;
+      if (u.active && !confirm(`Deactivate ${u.full_name || displayId(u.email)}? They will no longer be able to sign in.`)) return;
       const ok = await guard(async () => { await api.updateProfile(u.id, { active: !u.active }); return true; });
       if (ok) { u.active = !u.active; renderTeam(); }
       return;

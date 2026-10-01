@@ -1,0 +1,4 @@
+# Keep lead data out of the repo
+*.csv
+*.xlsx
+crm-backup-*.json

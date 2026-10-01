@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sales CRM</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Login -->
+  <div id="loginScreen" class="login hidden">
+    <!-- method="post" so credentials can never end up in the URL, even if scripts fail to load -->
+    <form id="loginForm" class="login-card" method="post" action="#">
+      <h1 class="brand-name">Sales CRM</h1>
+      <p class="muted">Sign in to continue</p>
+      <label>Email<input name="email" type="email" autocomplete="username" required></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <button type="submit" class="primary" id="loginBtn" disabled>Sign in</button>
+      <p id="loginError" class="error"></p>
+      <div id="demoHint" class="demo-hint hidden">
+        <strong>Demo mode:</strong> data is saved only in this browser.<br>
+        Admin: admin@demo.com / admin123<br>
+        Employee: employee@demo.com / emp123
+      </div>
+    </form>
+  </div>
+
+  <!-- App -->
+  <div id="appShell" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand brand-name">Sales CRM</div>
+      <nav id="nav"></nav>
+      <div class="me">
+        <div id="meName" class="me-name"></div>
+        <div id="meRole" class="me-role"></div>
+        <div class="row">
+          <button id="themeToggle" class="ghost small">Theme</button>
+          <button data-action="sign-out" class="ghost small">Sign out</button>
+        </div>
+      </div>
+    </aside>
+    <main>
+      <div id="demoBanner" class="banner hidden">Demo mode: data is stored only in this browser. Fill in <code>config.js</code> to go live for your team.</div>
+      <div id="view"></div>
+    </main>
+  </div>
+
+  <!-- Client dialog -->
+  <dialog id="leadDialog">
+    <form id="leadForm">
+      <header class="view-head">
+        <h2 id="leadTitle">Client</h2>
+        <button type="button" class="ghost" data-action="close-dialog" aria-label="Close">✕</button>
+      </header>
+      <div class="form-grid">
+        <label>Client name *<input name="client_name" required></label>
+        <label>Contact<input name="contact"></label>
+        <label>Email id<input name="email"></label>
+        <label>Location<input name="location"></label>
+        <label>Status<select name="status"></select></label>
+        <label id="assignWrap">Assigned to<select name="assigned_to"></select></label>
+        <div class="checks span2">
+          <span class="muted">Interested in:</span>
+          <label class="check"><input type="checkbox" name="pms"> PMS</label>
+          <label class="check"><input type="checkbox" name="aif"> AIF</label>
+          <label class="check"><input type="checkbox" name="mf"> MF</label>
+        </div>
+        <label class="span2">Products pitched<input name="products_pitched" placeholder="e.g. Stallion, Green Lantern"></label>
+        <label>Last connected<input name="last_connected" type="date"></label>
+        <label>Next connect<input name="next_connect" type="date"></label>
+        <label class="span2">Next action<input name="next_action"></label>
+        <label class="span2">Remark<textarea name="remark" rows="4"></textarea></label>
+      </div>
+
+      <section id="activityBox" class="hidden">
+        <h3>Log a connect</h3>
+        <div class="log-row">
+          <select id="actType"></select>
+          <input id="actNote" placeholder="What was discussed?">
+          <input id="actNext" type="date" title="Next connect date">
+          <button type="button" data-action="log-activity" class="primary">Log</button>
+        </div>
+        <p class="muted small-text">Logging sets "Last connected" to today. Add a date to also set "Next connect".</p>
+        <ul id="activityList" class="activity"></ul>
+      </section>
+
+      <footer class="row spread">
+        <button type="button" class="danger hidden" id="deleteLeadBtn" data-action="delete-lead">Delete</button>
+        <div class="row">
+          <button type="button" data-action="close-dialog">Cancel</button>
+          <button type="submit" class="primary">Save</button>
+        </div>
+      </footer>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
